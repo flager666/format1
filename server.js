@@ -14,7 +14,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const genAI_Free = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY_FREE || process.env.GEMINI_API_KEY });
+const genAI_Paid = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.post('/api/verify-password', (req, res) => {
   const { password } = req.body;
@@ -36,10 +37,21 @@ app.post('/api/generate', async (req, res) => {
       return res.status(400).json({ error: 'inputText is required' });
     }
 
-    const instructionWithJson = systemInstruction + `\n\nWAŻNE: Musisz zwrócić odpowiedź WYŁĄCZNIE jako poprawny obiekt JSON. Struktura: { "summary": "Krótkie podsumowanie wprowadzonych zmian lub wykrytych błędów po polsku", "text": "Twój właściwy wynik (poprawiony tekst, raport lub sformatowany dokument)" }.`;
+    const instructionWithJson = systemInstruction + `\n\nWAŻNE: Musisz zwrócić odpowiedź WYŁĄCZNIE jako poprawny obiekt JSON.
+Struktura:
+{
+  "changes": [
+    {
+      "location": "Akapit X, linia Y",
+      "action": "Krótki opis zmiany",
+      "explanation": "Edukacyjne uzasadnienie dlaczego to jest konieczne (np. zasady typograficzne)"
+    }
+  ],
+  "text": "Twój właściwy wynik"
+}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
+    const response = await genAI_Free.models.generateContent({
+      model: 'gemini-1.5-flash',
       contents: inputText,
       config: {
         systemInstruction: instructionWithJson,
@@ -50,10 +62,10 @@ app.post('/api/generate', async (req, res) => {
 
     try {
       const data = JSON.parse(response.text);
-      res.json({ text: data.text, summary: data.summary });
+      res.json({ text: data.text, changes: data.changes || [] });
     } catch (e) {
       console.warn("Failed to parse JSON, falling back to raw text:", e);
-      res.json({ text: response.text, summary: "Zmiany zostały wygenerowane." });
+      res.json({ text: response.text, changes: [] });
     }
   } catch (error) {
     console.error('Error generating content:', error);
@@ -75,7 +87,7 @@ app.post('/api/generate-image', async (req, res) => {
 
     const finalPrompt = `\${prompt}. Style: \${style || 'cyberpunk'}. High quality, detailed illustration.`;
 
-    const response = await ai.models.generateImages({
+    const response = await genAI_Paid.models.generateImages({
         model: 'imagen-3.0-generate-002',
         prompt: finalPrompt,
         config: {

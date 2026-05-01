@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import * as diff from 'diff';
 import {
   FileText, Wand2, Loader2, Copy, Check, Lock, Moon, Sun,
   Image as ImageIcon, Download, Layers, Sparkles, Type, Layout,
@@ -73,6 +74,12 @@ Restrykcje:
 - Nie wolno usuwać, dodawać ani streszczać treści.
 Wyjście: Zwróć wyłącznie sformatowany tekst.`;
 
+type ChangeItem = {
+  location: string;
+  action: string;
+  explanation: string;
+};
+
 export default function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
@@ -97,7 +104,24 @@ export default function App() {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   // Pending change state for confirmation modal
-  const [pendingChange, setPendingChange] = useState<{ summary: string, text: string, isSelection: boolean, originalText: string } | null>(null);
+  const [pendingChange, setPendingChange] = useState<{ changes: ChangeItem[], text: string, isSelection: boolean, originalText: string } | null>(null);
+
+  const renderDiff = (oldText: string, newText: string) => {
+    const diffs = diff.diffWordsWithSpace(oldText, newText);
+    return (
+      <div className="font-['Georgia',serif] whitespace-pre-wrap text-[13px] leading-relaxed break-words">
+        {diffs.map((part, index) => {
+          if (part.added) {
+            return <span key={index} className="bg-emerald-200/50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 rounded px-0.5">{part.value}</span>;
+          }
+          if (part.removed) {
+            return <span key={index} className="bg-red-200/50 dark:bg-red-900/40 text-red-800 dark:text-red-200 line-through rounded px-0.5">{part.value}</span>;
+          }
+          return <span key={index} className="text-slate-700 dark:text-slate-300">{part.value}</span>;
+        })}
+      </div>
+    );
+  };
 
   // Toggle Dark Mode
   useEffect(() => {
@@ -173,7 +197,7 @@ export default function App() {
       const data = await response.json();
 
       setPendingChange({
-        summary: data.summary || 'Propozycja zmian przygotowana.',
+        changes: data.changes || [],
         text: data.text || '',
         isSelection: !!(selection.show && selection.text),
         originalText: selection.show && selection.text ? selection.text : inputText
@@ -501,16 +525,30 @@ export default function App() {
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-6">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Raport / Podsumowanie akcji:</h4>
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 p-4 rounded-xl text-sm leading-relaxed border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
-                  {pendingChange.summary}
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Raport Edukacyjny:</h4>
+                <div className="flex flex-col gap-3">
+                  {pendingChange.changes && pendingChange.changes.length > 0 ? (
+                    pendingChange.changes.map((change, idx) => (
+                      <div key={idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{change.location}</span>
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{change.action}</span>
+                        </div>
+                        <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                          <strong className="text-slate-700 dark:text-slate-300">Dlaczego? </strong>
+                          {change.explanation}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-500 italic p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">Brak wykrytych zmian w strukturze.</div>
+                  )}
                 </div>
               </div>
               <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Podgląd nowej treści (pierwsze 500 znaków):</h4>
-                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-[13px] leading-relaxed text-slate-700 dark:text-slate-300 font-['Georgia',serif] whitespace-pre-wrap border border-slate-200 dark:border-slate-800 shadow-inner max-h-64 overflow-y-auto">
-                  {pendingChange.text.substring(0, 500)}
-                  {pendingChange.text.length > 500 && <span className="opacity-50">... (skrócono podgląd)</span>}
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Podgląd nowej treści ze zmianami:</h4>
+                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner max-h-64 overflow-y-auto">
+                  {renderDiff(pendingChange.originalText, pendingChange.text)}
                 </div>
               </div>
             </div>
