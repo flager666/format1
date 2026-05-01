@@ -33,6 +33,46 @@ Zero ingerencji redakcyjnej: Nie zmieniaj słownictwa, nie poprawiaj szyku zdań
 Czystość wyjściowa: Wynikiem Twojej pracy ma być wyłącznie sformatowany tekst – bez żadnych komentarzy wstępnych typu „Oto sformatowany tekst...”.
 Kompletność: Jeśli tekst kończy się w połowie zdania, sformatuj go do ostatniego znaku, nie próbując go kończyć.`;
 
+const PROMPT_TYPO = `Rola: Jesteś precyzyjnym automatem do korekty technicznej i typograficznej.
+Zadanie: Twoim jedynym celem jest naprawa błędów bez ingerencji w warstwę stylistyczną.
+Zakres działań:
+1. Poprawa błędów ortograficznych i literówek.
+2. Korekta błędów OCR (np. błędne łączenie/dzielenie wyrazów, zamiana "l" na "1" itp.).
+3. Korekta interpunkcji zgodnie z zasadami języka tekstu.
+4. Poprawa typografii: zamiana dywizów (-) na półpauzy (–) w dialogach i zakresach, usunięcie podwójnych spacji.
+Restrykcje:
+- NIE zmieniaj szyku zdań.
+- NIE podmieniaj słownictwa na synonimy.
+- NIE poprawiaj stylu, nawet jeśli wydaje się niezgrabny.
+- NIE dodawaj ani nie usuwaj akapitów.
+- NIE dodawaj żadnego komentarza przed ani po tekście.
+Wyjście: Zwróć wyłącznie poprawiony tekst źródłowy.`;
+
+const PROMPT_SPOJNOSC = `Rola: Jesteś surowym audytorem treści, analitykiem logiki narracyjnej i kontrolerem jakości tekstu.
+Zadanie: Przeprowadź krytyczną analizę dostarczonego tekstu. Twoim celem jest wykrycie błędów strukturalnych, logicznych oraz technicznych.
+Kategorie audytu:
+1. Logika i Fakty: Wykrywanie wewnętrznych sprzeczności.
+2. Ciągłość (Continuity): Błędy w chronologii, niewyjaśnione skoki czasowe.
+3. Spójność Postaci: Niespójności w opisach i zachowaniach.
+4. Formatowanie: Wykrywanie nieregularności w zapisie.
+Instrukcje wyjściowe:
+- Zwróć wyłącznie raport w formie listy punktowanej Markdown.
+- Każdy punkt: [Lokalizacja/Opis problemu] oraz [Sugestia naprawy].
+- Jeśli tekst jest spójny: "Brak wykrytych błędów spójności".
+- Zakaz: Nie poprawiaj tekstu źródłowego, nie pisz wstępów.`;
+
+const PROMPT_LAMANIE = `Rola: Jesteś ekspertem od strukturyzacji tekstu i składu Markdown.
+Zadanie: Twoim celem jest przekształcenie surowego tekstu w przejrzysty, sformatowany dokument.
+Zakres działań:
+1. Podziel tekst na logiczne akapity (zasada "jedna myśl na akapit").
+2. Wprowadź hierarchię nagłówków Markdown (#, ##, ###).
+3. Sformatuj wyliczenia jako listy punktowane lub numerowane.
+4. Zastosuj pogrubienie dla kluczowych terminów.
+Restrykcje:
+- Bezwzględnie zachowaj oryginalne słownictwo i szyk zdań.
+- Nie wolno usuwać, dodawać ani streszczać treści.
+Wyjście: Zwróć wyłącznie sformatowany tekst.`;
+
 export default function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
@@ -50,10 +90,14 @@ export default function App() {
   const [showMediaPanel, setShowMediaPanel] = useState(true);
   const [images, setImages] = useState<string[]>([]);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageStyle, setImageStyle] = useState('Cyberpunk / Sci-Fi');
 
   // Floating menu state
   const [selection, setSelection] = useState({ text: '', x: 0, y: 0, show: false });
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Pending change state for confirmation modal
+  const [pendingChange, setPendingChange] = useState<{ summary: string, text: string, isSelection: boolean, originalText: string } | null>(null);
 
   // Toggle Dark Mode
   useEffect(() => {
@@ -128,13 +172,12 @@ export default function App() {
 
       const data = await response.json();
 
-      if (selection.show && selection.text) {
-        // Replace selection in input text
-        const newText = inputText.replace(selection.text, data.text);
-        setInputText(newText);
-      } else {
-        setOutputText(data.text || '');
-      }
+      setPendingChange({
+        summary: data.summary || 'Propozycja zmian przygotowana.',
+        text: data.text || '',
+        isSelection: !!(selection.show && selection.text),
+        originalText: selection.show && selection.text ? selection.text : inputText
+      });
     } catch (error) {
       console.error('Error processing:', error);
       if (!selection.show) setOutputText('Wystąpił błąd podczas przetwarzania tekstu.');
@@ -144,16 +187,27 @@ export default function App() {
   };
 
   const generateImage = async () => {
-    const prompt = selection.show && selection.text ? selection.text : "Ilustracja książkowa, cyberpunk, wysoka jakość";
+    const prompt = selection.show && selection.text ? selection.text : "Zjawiskowa scena, główny bohater";
     setIsGeneratingImage(true);
     setSelection({ ...selection, show: false });
 
-    // Zastępcze wywołanie API do obrazów (mock)
-    setTimeout(() => {
-      const mockImage = `https://source.unsplash.com/random/800x600/?cyberpunk,art&${Date.now()}`;
-      setImages([mockImage, ...images]);
+    try {
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, style: imageStyle, password }),
+      });
+
+      if (!response.ok) throw new Error('Błąd generowania obrazu');
+
+      const data = await response.json();
+      setImages([data.imageUrl, ...images]);
+    } catch (error) {
+      console.error('Błąd:', error);
+      alert('Nie udało się wygenerować obrazu. Sprawdź konsolę.');
+    } finally {
       setIsGeneratingImage(false);
-    }, 2000);
+    }
   };
 
   const handleCopy = async () => {
@@ -182,10 +236,6 @@ export default function App() {
     } else {
       setSelection({ ...selection, show: false });
     }
-  };
-
-  const mockAction = (actionName: string) => {
-    alert(`Funkcja "${actionName}" została uruchomiona (wersja demonstracyjna).`);
   };
 
   // ---------------- Render Branches ---------------- //
@@ -272,13 +322,13 @@ export default function App() {
           {/* AI Tools Toolbar */}
           <div className="flex-1 hidden md:flex items-center justify-center gap-2">
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-              <button onClick={() => mockAction("Usuń Błędy Typo")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
+              <button onClick={() => handleProcess(PROMPT_TYPO)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
                 <Type size={14} className="text-slate-600 dark:text-slate-400" /> Typo
               </button>
-              <button onClick={() => mockAction("Sprawdź Spójność")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
+              <button onClick={() => handleProcess(PROMPT_SPOJNOSC)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
                 <Check size={14} className="text-emerald-600 dark:text-emerald-400" /> Spójność
               </button>
-              <button onClick={() => mockAction("Automatyczne Łamanie")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
+              <button onClick={() => handleProcess(PROMPT_LAMANIE)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all shadow-sm">
                 <Layout size={14} className="text-indigo-600 dark:text-indigo-400" /> Łamanie
               </button>
             </div>
@@ -392,7 +442,11 @@ export default function App() {
             <div className="p-4 flex flex-col h-full">
               <div className="mb-4">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Styl Ilustracji</label>
-                <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500/50">
+                <select 
+                  value={imageStyle}
+                  onChange={(e) => setImageStyle(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+                >
                   <option>Cyberpunk / Sci-Fi</option>
                   <option>Szkic Techniczny</option>
                   <option>Realizm Magiczny</option>
@@ -432,6 +486,59 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Pending Change Modal */}
+      {pendingChange && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Check size={18} className="text-emerald-500" /> Weryfikacja Zmian
+              </h3>
+              <button onClick={() => setPendingChange(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                ✕
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="mb-6">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Raport / Podsumowanie akcji:</h4>
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 p-4 rounded-xl text-sm leading-relaxed border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
+                  {pendingChange.summary}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Podgląd nowej treści (pierwsze 500 znaków):</h4>
+                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-[13px] leading-relaxed text-slate-700 dark:text-slate-300 font-['Georgia',serif] whitespace-pre-wrap border border-slate-200 dark:border-slate-800 shadow-inner max-h-64 overflow-y-auto">
+                  {pendingChange.text.substring(0, 500)}
+                  {pendingChange.text.length > 500 && <span className="opacity-50">... (skrócono podgląd)</span>}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
+              <button 
+                onClick={() => setPendingChange(null)}
+                className="px-5 py-2.5 rounded-xl font-medium text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              >
+                Odrzuć
+              </button>
+              <button 
+                onClick={() => {
+                  if (pendingChange.isSelection) {
+                    setInputText(inputText.replace(pendingChange.originalText, pendingChange.text));
+                  } else {
+                    setOutputText(pendingChange.text);
+                  }
+                  setPendingChange(null);
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors shadow-md shadow-emerald-600/20 flex items-center gap-2"
+              >
+                <Check size={16} /> Zatwierdź i Wprowadź
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
