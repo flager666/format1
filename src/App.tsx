@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { GoogleGenAI } from '@google/genai';
 import { FileText, Wand2, Loader2, Copy, Check } from 'lucide-react';
 
 const SYSTEM_INSTRUCTION = `Jesteś profesjonalnym redaktorem literackim, korektorem i ekspertem od składu tekstu (DTP) z wieloletnim doświadczeniem w pracy nad prozą (powieści, opowiadania). Twoim zadaniem jest przekształcanie surowego, nieuporządkowanego tekstu w czystą, profesjonalną formę literacką.
@@ -24,8 +23,6 @@ Instrukcja dla procesu:
 - Jeśli tekst jest urwany, dokończ formatowanie do ostatniego pełnego zdania.
 - Jeśli w tekście pojawiają się notatki autora (np. "[tutaj opis walki]"), pozostaw je w nawiasach kwadratowych, pogrubione.`;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export default function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
@@ -37,16 +34,23 @@ export default function App() {
     
     setIsLoading(true);
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview', // Pro model for complex text tasks & formatting
-        contents: inputText,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.2, // Low temperature for consistent formatting
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          inputText,
+          systemInstruction: SYSTEM_INSTRUCTION,
+        }),
       });
       
-      setOutputText(response.text || '');
+      if (!response.ok) {
+        throw new Error('Błąd serwera');
+      }
+      
+      const data = await response.json();
+      setOutputText(data.text || '');
     } catch (error) {
       console.error('Error processing text:', error);
       setOutputText('Wystąpił błąd podczas przetwarzania tekstu. Spróbuj ponownie.');
