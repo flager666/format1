@@ -192,7 +192,10 @@ export default function App() {
         }),
       });
 
-      if (!response.ok) throw new Error('Błąd serwera');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Błąd serwera');
+      }
 
       const data = await response.json();
 
@@ -202,9 +205,9 @@ export default function App() {
         isSelection: !!(selection.show && selection.text),
         originalText: selection.show && selection.text ? selection.text : inputText
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing:', error);
-      if (!selection.show) setOutputText('Wystąpił błąd podczas przetwarzania tekstu.');
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -222,7 +225,10 @@ export default function App() {
         body: JSON.stringify({ prompt, style: imageStyle, password }),
       });
 
-      if (!response.ok) throw new Error('Błąd generowania obrazu');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Błąd generowania obrazu');
+      }
 
       const data = await response.json();
       setImages([data.imageUrl, ...images]);

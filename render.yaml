@@ -1,24 +1,18 @@
-# Exported from Render on 2026-05-01T06:05:26Z
-version: "1"
-projects:
-- name: My project
-  environments:
-  - name: Production
-    services:
-    - type: web
-      name: format1
-      runtime: node
-      repo: https://github.com/flager666/format1
-      buildCommand: npm install && npm run build
-      startCommand: npm start
-      envVars:
+services:
+  - type: web
+    name: format1
+    runtime: node
+    repo: https://github.com/flager666/format1
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: GEMINI_API_KEY
         sync: false
       - key: APP_PASSWORD
         sync: false
       - key: GEMINI_API_KEY_FREE
         sync: false
-      autoDeployTrigger: commit
-      rootDir: ./
+    autoDeployTrigger: commit
+    rootDir: ./
