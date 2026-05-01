@@ -4,8 +4,9 @@ import * as diff from 'diff';
 import {
   FileText, Wand2, Loader2, Copy, Check, Lock, Moon, Sun,
   Image as ImageIcon, Download, Layers, Sparkles, Type, Layout,
-  BookOpen, Palette, FileDown, MoreVertical, MessageSquare
+  BookOpen, Palette, FileDown, MoreVertical, MessageSquare, BarChart2
 } from 'lucide-react';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
 
 const SYSTEM_INSTRUCTION = `Jesteś ekspertem DTP, redaktorem technicznym i korektorem z 20-letnim doświadczeniem w polskiej branży wydawniczej. Twoją specjalnością jest przygotowanie surowych maszynopisów do składu w standardzie premium. Twoim celem jest przekształcenie tekstu w idealnie sformatowany dokument, zachowując 100% wierności stylowi autora.
 
@@ -98,6 +99,7 @@ export default function App() {
   // New features state
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showMediaPanel, setShowMediaPanel] = useState(true);
+  const [activeRightTab, setActiveRightTab] = useState<'media' | 'analytics'>('analytics');
   const [images, setImages] = useState<string[]>([]);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imageStyle, setImageStyle] = useState('Cyberpunk / Sci-Fi');
@@ -490,57 +492,74 @@ export default function App() {
           </div>
         </section>
 
-        {/* Right Column: Media Panel */}
+        {/* Right Column: Dynamic Panel */}
         {showMediaPanel && (
-          <aside className="w-full lg:w-72 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all animate-in slide-in-from-right-8 duration-300">
-            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center gap-2">
-              <Palette size={14} className="text-slate-500 dark:text-slate-400" />
-              <h2 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nano Banana 2</h2>
+          <aside className="w-full lg:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all animate-in slide-in-from-right-8 duration-300">
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <button 
+                onClick={() => setActiveRightTab('analytics')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors ${activeRightTab === 'analytics' ? 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 border-b-2 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+              >
+                <BarChart2 size={14} />
+                Analityka
+              </button>
+              <button 
+                onClick={() => setActiveRightTab('media')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors ${activeRightTab === 'media' ? 'text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border-b-2 border-emerald-600 dark:border-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+              >
+                <Palette size={14} />
+                Media
+              </button>
             </div>
             
-            <div className="p-4 flex flex-col h-full">
-              <div className="mb-4">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Styl Ilustracji</label>
-                <select 
-                  value={imageStyle}
-                  onChange={(e) => setImageStyle(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+            {activeRightTab === 'analytics' ? (
+              <AnalyticsPanel text={inputText} />
+            ) : (
+              <div className="p-4 flex flex-col h-full overflow-y-auto">
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Styl Ilustracji</label>
+                  <select 
+                    value={imageStyle}
+                    onChange={(e) => setImageStyle(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+                  >
+                    <option>Cyberpunk / Sci-Fi</option>
+                    <option>Szkic Techniczny</option>
+                    <option>Realizm Magiczny</option>
+                    <option>Minimalizm Wektorowy</option>
+                  </select>
+                </div>
+
+                <button 
+                  onClick={generateImage}
+                  disabled={isGeneratingImage}
+                  className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 shadow-lg mb-6"
                 >
-                  <option>Cyberpunk / Sci-Fi</option>
-                  <option>Szkic Techniczny</option>
-                  <option>Realizm Magiczny</option>
-                  <option>Minimalizm Wektorowy</option>
-                </select>
-              </div>
+                  {isGeneratingImage ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-emerald-400" />}
+                  {isGeneratingImage ? 'Generowanie...' : 'Generuj z kontekstu'}
+                </button>
 
-              <button 
-                onClick={generateImage}
-                disabled={isGeneratingImage}
-                className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 shadow-lg mb-6"
-              >
-                {isGeneratingImage ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-slate-300" />}
-                {isGeneratingImage ? 'Generowanie...' : 'Generuj z kontekstu'}
-              </button>
-
-              <div className="flex-1 overflow-y-auto">
-                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Galeria Mediów</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {images.length > 0 ? images.map((img, i) => (
-                    <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group relative cursor-pointer">
-                      <img src={img} alt="Generated UI" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <span className="text-[10px] text-white font-medium bg-black/60 px-2 py-1 rounded">Użyj</span>
+                <div className="flex-1">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Galeria Mediów</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {images.length > 0 ? images.map((img, i) => (
+                      <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group relative cursor-pointer shadow-sm">
+                        <img src={img} alt="Generated UI" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                          <span className="text-[10px] text-white font-bold bg-black/60 px-3 py-1.5 rounded-md border border-white/20">Użyj</span>
+                        </div>
                       </div>
-                    </div>
-                  )) : (
-                    <div className="col-span-2 text-center py-8 opacity-50">
-                      <ImageIcon size={24} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="text-[10px] text-slate-500">Brak wygenerowanych mediów</p>
-                    </div>
-                  )}
+                    )) : (
+                      <div className="col-span-2 text-center py-10 opacity-60 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                        <ImageIcon size={24} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                        <p className="text-[10px] text-slate-500 font-medium">Brak wygenerowanych mediów</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </aside>
         )}
 
