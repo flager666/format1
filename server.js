@@ -37,6 +37,10 @@ app.post('/api/generate', async (req, res) => {
       return res.status(400).json({ error: 'inputText is required' });
     }
 
+    if (!process.env.GEMINI_API_KEY_FREE && !process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'Brak klucza API (GEMINI_API_KEY_FREE lub GEMINI_API_KEY) w konfiguracji serwera.' });
+    }
+
     const instructionWithJson = systemInstruction + `\n\nWAŻNE: Musisz zwrócić odpowiedź WYŁĄCZNIE jako poprawny obiekt JSON.
 Struktura:
 {
@@ -64,12 +68,12 @@ Struktura:
       const data = JSON.parse(response.text);
       res.json({ text: data.text, changes: data.changes || [] });
     } catch (e) {
-      console.warn("Failed to parse JSON, falling back to raw text:", e);
-      res.json({ text: response.text, changes: [] });
+      console.error("Błąd parsowania JSON z AI:", e);
+      res.status(500).json({ error: 'AI zwróciło nieprawidłowy format danych. Spróbuj ponownie.', details: e.message });
     }
   } catch (error) {
     console.error('Error generating content:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: error.message || 'Wystąpił nieoczekiwany błąd serwera.' });
   }
 });
 

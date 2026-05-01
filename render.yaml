@@ -18,5 +18,7 @@ projects:
         sync: false
       - key: APP_PASSWORD
         sync: false
+      - key: GEMINI_API_KEY_FREE
+        sync: false
       autoDeployTrigger: commit
       rootDir: ./
