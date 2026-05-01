@@ -1,85 +1,68 @@
-Plan Implementacji Funkcji DTP Studio
-Pro V2
-Poniżej znajduje się zaktualizowany, szczegółowy plan ożywienia funkcji interfejsu użytkownika
-w aplikacji DTP Studio, zawierający zoptymalizowane prompty systemowe dla modeli Gemini.
-1. Narzędzia Główne (Toolbar)
-Obecnie przyciski te wywołują funkcję mockAction. Docelowo każda z nich będzie wywoływać
-zoptymalizowany proces AI poprzez endpoint /api/generate.
-T Typo (Korekta Techniczna)
-● Cel: Usunięcie błędów literowych, interpunkcyjnych i typograficznych bez ingerencji w styl
-autora.
-● Prompt Systemowy:
-Rola: Jesteś precyzyjnym automatem do korekty technicznej i
-typograficznej.
-Zadanie: Twoim jedynym celem jest naprawa błędów bez ingerencji w
-warstwę stylistyczną.
-Zakres działań:
-1. Poprawa błędów ortograficznych i literówek.
-2. Korekta błędów OCR (np. błędne łączenie/dzielenie wyrazów,
-zamiana "l" na "1" itp.).
-3. Korekta interpunkcji zgodnie z zasadami języka tekstu.
-4. Poprawa typografii: zamiana dywizów (-) na półpauzy (–) w
-dialogach i zakresach, usunięcie podwójnych spacji.
-Restrykcje:
-- NIE zmieniaj szyku zdań.
-- NIE podmieniaj słownictwa na synonimy.
-- NIE poprawiaj stylu, nawet jeśli wydaje się niezgrabny.
-- NIE dodawaj ani nie usuwaj akapitów.
-- NIE dodawaj żadnego komentarza przed ani po tekście.
-Wyjście: Zwróć wyłącznie poprawiony tekst źródłowy.
-● Wynik: Nadpisuje outputText lub aktualizuje zaznaczony fragment.
-√ Spójność (Analiza i Logika)
-● Cel: Weryfikacja spójności narracyjnej, logiki wydarzeń i ciągłości czasu.
-● Działanie: Zafunkcjonowanie jako surowy Audytor, zwracający raport zamiast modyfikacji
-tekstu.
+# Plan Rozwoju: DTP Studio Pro
 
-● Prompt Systemowy:
-Rola: Jesteś surowym audytorem treści, analitykiem logiki
-narracyjnej i kontrolerem jakości tekstu.
-Zadanie: Przeprowadź krytyczną analizę dostarczonego tekstu
-(inputText). Twoim celem jest wykrycie błędów strukturalnych,
-logicznych oraz technicznych.
-Kategorie audytu:
-1. Logika i Fakty: Wykrywanie wewnętrznych sprzeczności.
-2. Ciągłość (Continuity): Błędy w chronologii, niewyjaśnione skoki
-czasowe.
-3. Spójność Postaci: Niespójności w opisach i zachowaniach.
-4. Formatowanie: Wykrywanie nieregularności w zapisie.
-Instrukcje wyjściowe:
-- Zwróć wyłącznie raport w formie listy punktowanej Markdown.
-- Każdy punkt: [Lokalizacja/Opis problemu] oraz [Sugestia
-naprawy].
-- Jeśli tekst jest spójny: "Brak wykrytych błędów spójności".
-- Zakaz: Nie poprawiaj tekstu źródłowego, nie pisz wstępów.
-● Wynik: Wyświetlany w polu outputText jako raport audytowy.
-◫ Łamanie (Formatowanie Strukturalne)
-● Cel: Automatyczny podział tekstu na akapity i nadanie struktury Markdown (nagłówki,
-listy).
-● Prompt Systemowy:
-Rola: Jesteś ekspertem od strukturyzacji tekstu i składu Markdown.
-Zadanie: Twoim celem jest przekształcenie surowego tekstu w
-przejrzysty, sformatowany dokument.
-Zakres działań:
-1. Podziel tekst na logiczne akapity (zasada "jedna myśl na
-akapit").
-2. Wprowadź hierarchię nagłówków Markdown (#, ##, ###).
-3. Sformatuj wyliczenia jako listy punktowane lub numerowane.
-4. Zastosuj pogrubienie dla kluczowych terminów.
-Restrykcje:
-- Bezwzględnie zachowaj oryginalne słownictwo i szyk zdań.
-- Nie wolno usuwać, dodawać ani streszczać treści.
-Wyjście: Zwróć wyłącznie sformatowany tekst.
-● Wynik: Sformatowany dokument w outputText.
-2. Nano Banana 2 (Multimedia)
-Funkcja: ✨ Generuj z kontekstu
-● Cel: Tworzenie ilustracji na podstawie treści tekstu i wybranego stylu.
-● Proces:
+Dokument ten zawiera architektoniczny i wdrożeniowy plan dla czterech kluczowych funkcji, które przekształcą DTP Studio Pro w kompletne, bezkonkurencyjne narzędzie dla wydawców, redaktorów i autorów.
 
-1. Analiza kontekstu: Pobranie zaznaczenia lub streszczenie inputText przez AI.
-2. Budowa Promptu: Połączenie opisu sceny z wybranym stylem z listy.
-3. API Obrazów: Wywołanie /api/generate-image (DALL-E 3 lub Midjourney).
-4. Galeria: Dodanie zwróconego URL do tablicy images i odświeżenie widoku.
-Wymagane zmiany w kodzie:
-1. Dodanie stanu imageStyle dla listy rozwijanej stylu ilustracji.
-2. Zastąpienie setTimeout w generateImage właściwym zapytaniem fetch.
-3. Dodanie obsługi błędów generowania (brak środków, błąd promptu).
+---
+
+## 1. 🖨️ Prawdziwy Silnik Eksportu (PDF, EPUB, DOCX)
+
+**Cel:** Zastąpienie atrapy przycisku eksportu pełnoprawnym systemem generowania gotowych plików wydawniczych.
+
+**Szczegóły wdrożenia:**
+*   **PDF:** Wykorzystanie bibliotek takich jak `jspdf` lub generowanie po stronie backendu przez headless browser (np. Puppeteer) w celu uzyskania idealnego składu (strony tytułowe, marginesy, numery stron, osadzanie grafik wygenerowanych przez Nano Banana 2).
+*   **EPUB:** Zastosowanie biblioteki np. `epub-gen` do tworzenia natywnych e-booków. Rozdziały będą automatycznie parsowane na podstawie nagłówków `##` z tekstu w formacie Markdown.
+*   **HTML/DOCX:** Konwersja Markdown do czystego DOCX (biblioteka `docx` w Node.js) dla tradycyjnych agencji wydawniczych i redakcji.
+
+**Kamienie milowe:**
+1. Stworzenie nowych endpointów na backendzie (`/api/export/pdf`, `/api/export/epub`).
+2. Parsowanie wyjściowego Markdowna na format pośredni (HTML).
+3. Dodanie modala "Opcje Eksportu" na frontendzie (wybór formatu, dodanie okładki).
+
+---
+
+## 2. 🧠 Słownik Projektu / Glosariusz AI (Consistency Enforcer)
+
+**Cel:** Utrzymanie absolutnej spójności narracyjnej i logicznej w długich tekstach (World-building).
+
+**Szczegóły wdrożenia:**
+*   **UI:** Dodanie nowej zakładki "Glosariusz" w Dynamicznym Panelu bocznym (obok Analityki i Mediów).
+*   **UX:** Prosty interfejs "Klucz - Wartość" (np. *Jan Kowalski* -> *szatyn, nerwowy, ma bliznę*).
+*   **Logika AI:** Podczas wysyłania zapytania na endpoint `/api/generate`, zawartość glosariusza jest dołączana jako twardy kontekst w `systemInstruction`.
+*   **Działanie:** Jeśli AI wykryje w tekście "Jan poprawił swoje blond włosy", automatycznie wyłapie ten błąd, zaproponuje zmianę w modalu Weryfikacji Zmian i dopisze w raporcie: *"Poprawiono kolor włosów z blond na szatyn, zgodnie z Glosariuszem"*.
+
+**Kamienie milowe:**
+1. Stworzenie komponentu `GlossaryPanel.tsx`.
+2. Zapis stanu glosariusza (Pamięć lokalna / LocalStorage).
+3. Aktualizacja promptów systemowych w `server.js`, aby przyjmowały dynamiczny "World Context".
+
+---
+
+## 3. ✍️ AI Co-Pilot (Rozwijanie Myśli i Ghostwriting)
+
+**Cel:** Asystent pomagający przezwyciężyć blokadę pisarską i ułatwiający manipulację długością i tonem tekstu.
+
+**Szczegóły wdrożenia:**
+*   Rozszerzenie obecnego "pływającego menu" pojawiającego się przy zaznaczeniu tekstu.
+*   **Funkcja "Rozwiń to":** Użytkownik zaznacza "Wyszedł z domu i zobaczył burzę". System wysyła to do AI z promptem nakazującym literackie rozwinięcie w akapit w stylu reszty dokumentu.
+*   **Funkcja "Skróć to":** Usuwanie "lania wody" – kondensacja długiego akapitu do najważniejszych faktów (przydatne do artykułów biznesowych).
+
+**Kamienie milowe:**
+1. Dodanie przycisków "Rozwiń" i "Skróć" w pływającym menu (`App.tsx`).
+2. Przygotowanie nowych, dedykowanych promptów dla Co-Pilota.
+3. Sprawne zastępowanie zaznaczonego fragmentu wygenerowanym tekstem, wykorzystując istniejący system akceptacji zmian.
+
+---
+
+## 4. 🗄️ Time Machine (Historia Wersji / Rewizje)
+
+**Cel:** Bezpieczeństwo pracy – zabezpieczenie przed przypadkową utratą dobrych fragmentów podczas edycji z AI.
+
+**Szczegóły wdrożenia:**
+*   **UI:** Nowa ikona "Zegar / Historia" w lewym górnym rogu edytora źródłowego.
+*   **Logika:** Po każdym zatwierdzeniu zmian przez użytkownika ("Zatwierdź i Wprowadź"), aktualny tekst z pola "Źródło" (przed zmianą) jest zapisywany w tablicy historii.
+*   **UX:** Lista z datą i godziną. Kliknięcie w dowolną migawkę przywraca tamtą wersję tekstu. Podobnie jak w Google Docs.
+
+**Kamienie milowe:**
+1. Stworzenie struktury stanu dla historii (`Array<{ timestamp: number, text: string }>`).
+2. Wykrywanie momentu zapisu (na przycisku zatwierdzania z AI).
+3. Dodanie bocznego panelu wysuwanego (Drawer) z listą chronologiczną rewizji.
