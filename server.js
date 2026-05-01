@@ -28,7 +28,7 @@ app.post('/api/verify-password', (req, res) => {
 app.post('/api/generate', async (req, res) => {
   try {
     const { inputText, systemInstruction, password } = req.body;
-    
+
     if (process.env.APP_PASSWORD && password !== process.env.APP_PASSWORD) {
       return res.status(401).json({ error: 'Nieprawidłowe hasło.' });
     }
@@ -55,7 +55,7 @@ Struktura:
 }`;
 
     const response = await genAI_Free.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: inputText,
       config: {
         systemInstruction: instructionWithJson,
@@ -80,7 +80,7 @@ Struktura:
 app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt, style, password } = req.body;
-    
+
     if (process.env.APP_PASSWORD && password !== process.env.APP_PASSWORD) {
       return res.status(401).json({ error: 'Nieprawidłowe hasło.' });
     }
@@ -92,13 +92,13 @@ app.post('/api/generate-image', async (req, res) => {
     const finalPrompt = `\${prompt}. Style: \${style || 'cyberpunk'}. High quality, detailed illustration.`;
 
     const response = await genAI_Paid.models.generateImages({
-        model: 'imagen-3.0-generate-002',
-        prompt: finalPrompt,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: "image/jpeg",
-            aspectRatio: "4:3"
-        }
+      model: 'gemini-3.1-flash-image-preview',
+      prompt: finalPrompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: "image/jpeg",
+        aspectRatio: "4:3"
+      }
     });
 
     const base64Image = response.generatedImages[0].image.imageBytes;
