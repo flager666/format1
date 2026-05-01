@@ -1,11 +1,18 @@
-services:
-  - type: web
-    name: dtp-ai-editor
-    env: node
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    envVars:
-      - key: NODE_VERSION
-        value: 20
+# Exported from Render on 2026-05-01T06:05:26Z
+version: "1"
+projects:
+- name: My project
+  environments:
+  - name: Production
+    services:
+    - type: web
+      name: format1
+      runtime: static
+      repo: https://github.com/flager666/format1
+      envVars:
       - key: GEMINI_API_KEY
         sync: false
+      buildCommand: npm install
+      staticPublishPath: ./
+      autoDeployTrigger: commit
+      rootDir: ./
