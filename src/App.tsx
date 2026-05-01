@@ -1,37 +1,107 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileText, Wand2, Loader2, Copy, Check } from 'lucide-react';
+import { FileText, Wand2, Loader2, Copy, Check, Lock } from 'lucide-react';
 
-const SYSTEM_INSTRUCTION = `Jesteś profesjonalnym redaktorem literackim, korektorem i ekspertem od składu tekstu (DTP) z wieloletnim doświadczeniem w pracy nad prozą (powieści, opowiadania). Twoim zadaniem jest przekształcanie surowego, nieuporządkowanego tekstu w czystą, profesjonalną formę literacką.
+const SYSTEM_INSTRUCTION = `Jesteś ekspertem DTP, redaktorem technicznym i korektorem z 20-letnim doświadczeniem w polskiej branży wydawniczej. Twoją specjalnością jest przygotowanie surowych maszynopisów do składu w standardzie premium. Twoim celem jest przekształcenie tekstu w idealnie sformatowany dokument, zachowując 100% wierności stylowi autora.
 
-Twoje cele:
-- Strukturyzacja dialogów: Każda wypowiedź bohatera musi zaczynać się od nowej linii. Używaj polskich myślników dialogowych (półpauza „–” lub pauza „—”) poprzedzonych spacją nierozdzielającą, jeśli to konieczne.
-- Podział na akapity: Rozbijaj „ściany tekstu”. Twórz nowe akapity tam, gdzie następuje zmiana wątku, czasu, miejsca lub perspekwyspektywy bohatera.
-- Nagłówki i sekcje: Identyfikuj naturalne przerwy w narracji. Wstawiaj nagłówki (np. ## Rozdział X) lub znaczniki przejścia sceny (***), jeśli wyczujesz wyraźną zmianę czasu lub miejsca.
-- Interpunkcja dialogowa: Poprawiaj interpunkcję w didaskaliach (np. mała litera po myślniku, jeśli czasownik opisuje czynność mówienia: – Idę stąd – powiedział Marek.).
-- Usuwanie błędów technicznych: Łącz przypadkowo rozbite wyrazy, usuwaj zbędne spacje i naprawiaj błędy powstałe przy kopiowaniu tekstu (np. z OCR).
+Zadania techniczne (Standard Wydawniczy):
 
-Zasady formatowania (Markdown):
-- Używaj # dla tytułów książek.
-- Używaj ## dla rozdziałów.
-- Używaj ### dla podtytułów lub ważnych sekcji.
-- Stosuj kursywę *tekst* dla myśli bohaterów lub podkreśleń.
-- Retuszuj tekst tak, aby był gotowy do wklejenia do edytora tekstowego (Word/Google Docs).
+Polski zapis dialogowy:
 
-Instrukcja dla procesu:
-- Zachowaj 100% oryginalnej treści autora. Nie dopisuj własnych zdań, nie zmieniaj stylu autora ani słownictwa (chyba że jest to ewidentna literówka).
-- Jeśli tekst jest urwany, dokończ formatowanie do ostatniego pełnego zdania.
-- Jeśli w tekście pojawiają się notatki autora (np. "[tutaj opis walki]"), pozostaw je w nawiasach kwadratowych, pogrubione.`;
+Używaj wyłącznie półpauzy (–) na początku dialogu.
+
+Zasada didaskaliów: Jeśli po dialogu występuje czasownik oznaczający mówienie (rzekł, zapytał, mruknął), kontynuuj małą literą bez kropki przed myślnikiem (np. „– Idę – rzekł.”). Jeśli po dialogu występuje czynność (spojrzał, westchnął), zamknij dialog kropką i zacznij didaskalia wielką literą (np. „– Idę. – Spojrzał na zegarek.”).
+
+Struktura i rytm:
+
+Eliminuj „ściany tekstu” poprzez logiczny podział na akapity (nowa myśl, zmiana czasu/miejsca/akcji).
+
+Wstawiaj *** w miejscach wyraźnych przeskoków czasowych lub narracyjnych wewnątrz rozdziałów.
+
+Higiena tekstu:
+
+Usuwaj podwójne spacje, błędy OCR (np. l zamiast I, 0 zamiast O).
+
+Łącz wyrazy przypadkowo rozbite na końcach linii.
+
+Zasady formatowania Markdown:
+
+# TYTUŁ KSIĄŻKI (Wszystkie litery wielkie).
+
+## Numer Rozdziału / Tytuł Rozdziału.
+
+*Kursywa* dla myśli wewnętrznych oraz podkreśleń (nie używaj cudzysłowów dla myśli).
+
+Wszelkie uwagi autora lub luki w tekście (np. [opis walki]) pozostaw jako [BOGRUBIONY TEKST W NAWIASACH].
+
+Instrukcje rygorystyczne:
+
+Zero ingerencji redakcyjnej: Nie zmieniaj słownictwa, nie poprawiaj szyku zdań (chyba że to oczywisty błąd techniczny), nie dopisuj własnej treści.
+
+Czystość wyjściowa: Wynikiem Twojej pracy ma być wyłącznie sformatowany tekst – bez żadnych komentarzy wstępnych typu „Oto sformatowany tekst...”.
+
+Kompletność: Jeśli tekst kończy się w połowie zdania, sformatuj go do ostatniego znaku, nie próbując go kończyć.`;
 
 export default function App() {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(true); // Start verifying to check if no password required
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: '' }),
+        });
+        if (res.ok) {
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.error('Auth check failed', err);
+      } finally {
+        setIsVerifying(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password.trim()) return;
+
+    setIsVerifying(true);
+    setAuthError('');
+
+    try {
+      const res = await fetch('/api/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+
+      if (res.ok) {
+        setIsAuthenticated(true);
+      } else {
+        const data = await res.json();
+        setAuthError(data.error || 'Nieprawidłowe hasło');
+      }
+    } catch (err) {
+      setAuthError('Błąd połączenia z serwerem');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const handleProcess = async () => {
     if (!inputText.trim()) return;
-    
+
     setIsLoading(true);
     try {
       const response = await fetch('/api/generate', {
@@ -42,13 +112,14 @@ export default function App() {
         body: JSON.stringify({
           inputText,
           systemInstruction: SYSTEM_INSTRUCTION,
+          password,
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Błąd serwera');
       }
-      
+
       const data = await response.json();
       setOutputText(data.text || '');
     } catch (error) {
@@ -68,6 +139,52 @@ export default function App() {
       console.error("Failed to copy", err);
     }
   };
+
+  if (!isAuthenticated && !isVerifying) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f4] flex flex-col items-center justify-center font-['Inter',system-ui,sans-serif] p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 w-full max-w-md">
+          <div className="flex justify-center mb-6">
+            <div className="bg-orange-600 p-3 rounded-xl text-white shadow-sm">
+              <Lock size={28} />
+            </div>
+          </div>
+          <h1 className="text-2xl font-semibold text-center text-gray-900 mb-2">Dostęp zablokowany</h1>
+          <p className="text-center text-gray-500 text-sm mb-8">Wprowadź hasło, aby uzyskać dostęp do aplikacji.</p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                placeholder="Hasło"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 bg-gray-50 text-gray-900 placeholder-gray-400"
+              />
+            </div>
+            {authError && (
+              <p className="text-red-500 text-sm text-center font-medium">{authError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={!password}
+              className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span>Zaloguj się</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && isVerifying) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f4] flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-orange-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f4] flex flex-col font-['Inter',system-ui,sans-serif]">
@@ -94,7 +211,7 @@ export default function App() {
 
       {/* Main Split Interface */}
       <main className="flex-1 max-w-[1920px] mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        
+
         {/* Left Column: Input */}
         <section className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden min-h-[40vh] lg:min-h-0">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -115,7 +232,7 @@ export default function App() {
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sformatowany Wynik</h2>
             {outputText && (
-              <button 
+              <button
                 onClick={handleCopy}
                 className="text-gray-400 hover:text-gray-600 flex items-center gap-1.5 transition-colors text-xs font-medium bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm"
               >
@@ -124,7 +241,7 @@ export default function App() {
               </button>
             )}
           </div>
-          
+
           <div className="flex-1 overflow-auto bg-[#fafafa]">
             {outputText ? (
               <div className="p-8 prose prose-orange max-w-none prose-p:leading-relaxed prose-headings:font-['Montserrat',sans-serif] prose-h2:font-light prose-h2:mb-4 prose-h2:mt-8 font-['Georgia',serif] text-[15px] prose-p:mb-4 text-gray-800">
@@ -139,7 +256,7 @@ export default function App() {
                 <p className="text-xs text-gray-400 mt-1 max-w-[250px]">Wklej tekst i kliknij "Formatuj Tekst", aby rozpocząć pracę redaktorską.</p>
               </div>
             )}
-            
+
             {isLoading && (
               <div className="absolute inset-x-0 bottom-0 top-12 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
                 <div className="bg-white px-6 py-4 rounded-full shadow-lg border border-gray-100 flex items-center gap-3">

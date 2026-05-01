@@ -7,12 +7,16 @@ projects:
     services:
     - type: web
       name: format1
-      runtime: static
+      runtime: node
       repo: https://github.com/flager666/format1
+      buildCommand: npm install && npm run build
+      startCommand: npm start
       envVars:
+      - key: NODE_VERSION
+        value: 20
       - key: GEMINI_API_KEY
         sync: false
-      buildCommand: npm install
-      staticPublishPath: ./
+      - key: APP_PASSWORD
+        sync: false
       autoDeployTrigger: commit
       rootDir: ./

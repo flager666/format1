@@ -16,10 +16,22 @@ app.use(express.json());
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+app.post('/api/verify-password', (req, res) => {
+  const { password } = req.body;
+  if (process.env.APP_PASSWORD && password !== process.env.APP_PASSWORD) {
+    return res.status(401).json({ error: 'Nieprawidłowe hasło.' });
+  }
+  res.json({ success: true });
+});
+
 app.post('/api/generate', async (req, res) => {
   try {
-    const { inputText, systemInstruction } = req.body;
+    const { inputText, systemInstruction, password } = req.body;
     
+    if (process.env.APP_PASSWORD && password !== process.env.APP_PASSWORD) {
+      return res.status(401).json({ error: 'Nieprawidłowe hasło.' });
+    }
+
     if (!inputText) {
       return res.status(400).json({ error: 'inputText is required' });
     }
