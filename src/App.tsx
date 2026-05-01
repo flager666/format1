@@ -78,6 +78,9 @@ type ChangeItem = {
   location: string;
   action: string;
   explanation: string;
+  originalText?: string;
+  newText?: string;
+  isSelected?: boolean;
 };
 
 export default function App() {
@@ -105,6 +108,32 @@ export default function App() {
 
   // Pending change state for confirmation modal
   const [pendingChange, setPendingChange] = useState<{ changes: ChangeItem[], text: string, isSelection: boolean, originalText: string } | null>(null);
+
+  const getPreviewText = () => {
+    if (!pendingChange) return '';
+    
+    // Sprawdzamy czy AI zwróciło dane do podmiany (wsparcia selektywnego)
+    const hasOriginalTextData = pendingChange.changes.some(c => c.originalText);
+    const allSelected = pendingChange.changes.every(c => c.isSelected !== false);
+
+    if (!hasOriginalTextData && allSelected) {
+      return pendingChange.text; // Fallback do starego zachowania
+    }
+
+    let preview = pendingChange.originalText;
+    pendingChange.changes.forEach(change => {
+      if (change.isSelected !== false && change.originalText && change.newText) {
+        preview = preview.replace(change.originalText, change.newText);
+      }
+    });
+    
+    // Jeśli z jakiegoś powodu preview się nie zmieniło a powinno, a mamy fallback, użyjmy text
+    if (preview === pendingChange.originalText && allSelected && pendingChange.text) {
+        return pendingChange.text;
+    }
+
+    return preview;
+  };
 
   const renderDiff = (oldText: string, newText: string) => {
     const diffs = diff.diffWordsWithSpace(oldText, newText);
@@ -200,7 +229,7 @@ export default function App() {
       const data = await response.json();
 
       setPendingChange({
-        changes: data.changes || [],
+        changes: (data.changes || []).map((c: any) => ({ ...c, isSelected: true })),
         text: data.text || '',
         isSelection: !!(selection.show && selection.text),
         originalText: selection.show && selection.text ? selection.text : inputText
@@ -535,13 +564,26 @@ export default function App() {
                 <div className="flex flex-col gap-3">
                   {pendingChange.changes && pendingChange.changes.length > 0 ? (
                     pendingChange.changes.map((change, idx) => (
-                      <div key={idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">{change.location}</span>
-                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{change.action}</span>
+                      <div 
+                        key={idx} 
+                        onClick={() => {
+                          const newChanges = [...pendingChange.changes];
+                          newChanges[idx].isSelected = !newChanges[idx].isSelected;
+                          setPendingChange({...pendingChange, changes: newChanges});
+                        }}
+                        className={`bg-white dark:bg-slate-800 border ${change.isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'} rounded-xl p-4 shadow-sm flex flex-col gap-2 relative cursor-pointer transition-all`}
+                      >
+                        <div className="absolute top-4 right-4">
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${change.isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                            {change.isSelected && <Check size={14} className="text-white" />}
+                          </div>
                         </div>
-                        <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                          <strong className="text-slate-700 dark:text-slate-300">Dlaczego? </strong>
+                        <div className="flex flex-wrap items-center gap-2 pr-8">
+                          <span className={`${change.isSelected ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'} text-[10px] px-2 py-0.5 rounded-full font-bold uppercase transition-colors`}>{change.location}</span>
+                          <span className={`text-sm font-semibold ${change.isSelected ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>{change.action}</span>
+                        </div>
+                        <p className={`text-[13px] leading-relaxed pr-8 ${change.isSelected ? 'text-slate-600 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                          <strong className={change.isSelected ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'}>Dlaczego? </strong>
                           {change.explanation}
                         </p>
                       </div>
@@ -554,7 +596,7 @@ export default function App() {
               <div>
                 <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Podgląd nowej treści ze zmianami:</h4>
                 <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner max-h-64 overflow-y-auto">
-                  {renderDiff(pendingChange.originalText, pendingChange.text)}
+                  {renderDiff(pendingChange.originalText, getPreviewText())}
                 </div>
               </div>
             </div>
@@ -567,10 +609,11 @@ export default function App() {
               </button>
               <button 
                 onClick={() => {
+                  const finalText = getPreviewText();
                   if (pendingChange.isSelection) {
-                    setInputText(inputText.replace(pendingChange.originalText, pendingChange.text));
+                    setInputText(inputText.replace(pendingChange.originalText, finalText));
                   } else {
-                    setOutputText(pendingChange.text);
+                    setOutputText(finalText);
                   }
                   setPendingChange(null);
                 }}
