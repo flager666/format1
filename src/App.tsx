@@ -4,7 +4,7 @@ import * as diff from 'diff';
 import {
   FileText, Wand2, Loader2, Copy, Check, Lock, Moon, Sun,
   Image as ImageIcon, Download, Layers, Sparkles, Type, Layout,
-  BookOpen, Palette, FileDown, MoreVertical, MessageSquare, BarChart2
+  BookOpen, Palette, FileDown, MoreVertical, MessageSquare, BarChart2, History
 } from 'lucide-react';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 
@@ -104,16 +104,26 @@ export default function App() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imageStyle, setImageStyle] = useState('Cyberpunk / Sci-Fi');
 
+  // Export state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [docTitle, setDocTitle] = useState('Dokument_DTP');
+  const [docAuthor, setDocAuthor] = useState('');
+  const [exporting, setExporting] = useState(false);
+
   // Floating menu state
   const [selection, setSelection] = useState({ text: '', x: 0, y: 0, show: false });
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Time Machine state
+  const [history, setHistory] = useState<{timestamp: number, text: string}[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Pending change state for confirmation modal
   const [pendingChange, setPendingChange] = useState<{ changes: ChangeItem[], text: string, isSelection: boolean, originalText: string } | null>(null);
 
   const getPreviewText = () => {
     if (!pendingChange) return '';
-    
+
     // Sprawdzamy czy AI zwróciło dane do podmiany (wsparcia selektywnego)
     const hasOriginalTextData = pendingChange.changes.some(c => c.originalText);
     const allSelected = pendingChange.changes.every(c => c.isSelected !== false);
@@ -128,10 +138,10 @@ export default function App() {
         preview = preview.replace(change.originalText, change.newText);
       }
     });
-    
+
     // Jeśli z jakiegoś powodu preview się nie zmieniło a powinno, a mamy fallback, użyjmy text
     if (preview === pendingChange.originalText && allSelected && pendingChange.text) {
-        return pendingChange.text;
+      return pendingChange.text;
     }
 
     return preview;
@@ -152,6 +162,82 @@ export default function App() {
         })}
       </div>
     );
+  };
+
+  const exportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>${docTitle}</title>
+            <style>
+              @page { size: A4; margin: 2cm; }
+              body { font-family: 'Georgia', serif; line-height: 1.6; color: #000; font-size: 12pt; }
+              h1 { font-family: 'Helvetica', sans-serif; font-size: 24pt; margin-bottom: 2rem; font-weight: bold; }
+              h2 { font-family: 'Helvetica', sans-serif; font-size: 16pt; margin-top: 2rem; margin-bottom: 1rem; }
+              p { margin-bottom: 1rem; text-align: justify; }
+              ul, ol { margin-bottom: 1rem; }
+            </style>
+          </head>
+          <body>
+            ${document.querySelector('.prose')?.innerHTML || 'Brak treści do wydruku.'}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+    }
+    setShowExportModal(false);
+  };
+
+  const exportDocx = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch('/api/export/docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown: outputText, title: docTitle, password })
+      });
+      if (!response.ok) throw new Error('Błąd generowania DOCX na serwerze.');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${docTitle || 'document'}.docx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setExporting(false);
+      setShowExportModal(false);
+    }
+  };
+
+  const exportEpub = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch('/api/export/epub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown: outputText, title: docTitle, author: docAuthor, coverImage: images[0], password })
+      });
+      if (!response.ok) throw new Error('Błąd generowania EPUB na serwerze.');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${docTitle || 'document'}.epub`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setExporting(false);
+      setShowExportModal(false);
+    }
   };
 
   // Toggle Dark Mode
@@ -271,34 +357,46 @@ export default function App() {
     }
   };
 
+  const handleTextSelection = (e: any) => {
+    if (!textAreaRef.current) return;
+    const { selectionStart, selectionEnd, value } = textAreaRef.current;
+    if (selectionStart !== selectionEnd) {
+      const text = value.substring(selectionStart, selectionEnd);
+      if (text.trim().length > 0) {
+        const rect = textAreaRef.current.getBoundingClientRect();
+        setSelection({
+          text,
+          x: e.clientX ? e.clientX : rect.left + rect.width / 2,
+          y: e.clientY ? e.clientY - 40 : rect.top + 20,
+          show: true
+        });
+        return;
+      }
+    }
+    setSelection({ ...selection, show: false });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: any) => {
+      if (selection.show && !e.target.closest('#floating-menu') && !e.target.closest('textarea')) {
+        setSelection({ ...selection, show: false });
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selection]);
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(outputText);
+      await navigator.clipboard.writeText(inputText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy", err);
     }
   };
-
-  const handleTextSelection = () => {
-    const text = window.getSelection()?.toString();
-    if (text && text.trim().length > 0) {
-      const range = window.getSelection()?.getRangeAt(0);
-      const rect = range?.getBoundingClientRect();
-      if (rect) {
-        setSelection({
-          text,
-          x: rect.left + window.scrollX + (rect.width / 2),
-          y: rect.top + window.scrollY - 60,
-          show: true
-        });
-      }
-    } else {
-      setSelection({ ...selection, show: false });
-    }
-  };
-
   // ---------------- Render Branches ---------------- //
 
   if (!isAuthenticated && !isVerifying) {
@@ -312,7 +410,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">Dostęp chroniony</h1>
           <p className="text-center text-slate-500 dark:text-slate-400 text-sm mb-8">Wprowadź hasło, aby uzyskać dostęp do DTP Studio.</p>
-          
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <input
@@ -347,10 +445,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col font-['Inter',system-ui,sans-serif] text-slate-800 dark:text-slate-200 transition-colors selection:bg-slate-300 dark:selection:bg-slate-700/50">
-      
+
       {/* Floating Contextual Menu */}
       {selection.show && (
-        <div 
+        <div
           className="absolute z-50 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 flex gap-1 p-1 animate-in fade-in zoom-in duration-200"
           style={{ left: `${selection.x}px`, top: `${selection.y}px`, transform: 'translateX(-50%)' }}
         >
@@ -369,7 +467,7 @@ export default function App() {
       {/* Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 shadow-sm transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-4 max-w-[1920px] mx-auto">
-          
+
           <div className="flex items-center gap-3">
             <div className="bg-slate-700 dark:bg-slate-600 p-2.5 rounded-xl text-white shadow-md shadow-slate-700/20">
               <Layers size={22} />
@@ -396,20 +494,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-full transition-colors"
               title="Zmień motyw"
             >
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            
+
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
 
-            <button onClick={() => mockAction("Eksport PDF/X-4")} className="p-2.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-colors" title="Eksportuj">
+            <button onClick={() => setShowExportModal(true)} disabled={!inputText} className="p-2.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Eksportuj Plik">
               <FileDown size={18} />
             </button>
-            
+
             <button onClick={() => setShowMediaPanel(!showMediaPanel)} className={`p-2.5 rounded-full transition-colors ${showMediaPanel ? 'bg-slate-200 text-slate-800 dark:bg-slate-700/50 dark:text-slate-300' : 'text-slate-500 hover:text-slate-900 bg-slate-100 dark:bg-slate-800 dark:text-slate-400'}`} title="Panel Multimediów">
               <ImageIcon size={18} />
             </button>
@@ -428,7 +526,7 @@ export default function App() {
 
       {/* Main Workspace */}
       <main className="flex-1 max-w-[1920px] mx-auto w-full p-4 flex flex-col lg:flex-row gap-4 overflow-hidden" onMouseUp={handleTextSelection}>
-        
+
         {/* Left Column: Input */}
         <section className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden min-h-[40vh] transition-colors">
           <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
@@ -436,10 +534,21 @@ export default function App() {
               <BookOpen size={14} className="text-slate-400" />
               <h2 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Źródło</h2>
             </div>
-            <span className="text-[11px] text-slate-400 font-mono">{inputText.length} znaków</span>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setShowHistory(true)}
+                className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 uppercase tracking-wider transition-colors"
+                title="Historia Wersji"
+              >
+                <History size={14} /> Historia ({history.length})
+              </button>
+              <span className="text-[11px] text-slate-400 font-mono">{inputText.length} znaków</span>
+            </div>
           </div>
           <textarea
             ref={textAreaRef}
+            onMouseUp={handleTextSelection}
+            onKeyUp={handleTextSelection}
             className="flex-1 w-full p-6 text-slate-800 dark:text-slate-200 bg-transparent resize-none focus:outline-none font-['Georgia',serif] leading-relaxed text-[15px] placeholder-slate-300 dark:placeholder-slate-700"
             placeholder="Wklej surowy tekst do składu..."
             value={inputText}
@@ -448,48 +557,6 @@ export default function App() {
           />
         </section>
 
-        {/* Middle Column: Output */}
-        <section className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden relative min-h-[40vh] transition-colors">
-          <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Layout size={14} className="text-slate-500 dark:text-slate-400" />
-              <h2 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Podgląd Wydruku</h2>
-            </div>
-            {outputText && (
-              <button onClick={handleCopy} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1.5 transition-colors text-[11px] font-semibold bg-white dark:bg-slate-800 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-                {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                {copied ? 'Skopiowano' : 'Kopiuj'}
-              </button>
-            )}
-          </div>
-          
-          <div className="flex-1 overflow-auto bg-slate-50/30 dark:bg-slate-950/30">
-            {outputText ? (
-              <div className="p-8 prose prose-slate dark:prose-invert max-w-none prose-p:leading-relaxed prose-headings:font-['Inter',sans-serif] prose-h1:font-black prose-h1:text-2xl prose-h1:mb-6 prose-h2:font-light prose-h2:text-xl prose-h2:mb-4 prose-h2:mt-8 font-['Georgia',serif] text-[15px] prose-p:mb-4">
-                <ReactMarkdown>{outputText}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className="flex-1 h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center opacity-60">
-                <div className="w-16 h-16 mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center rotate-3 border border-slate-200 dark:border-slate-700">
-                  <Wand2 size={24} className="text-slate-300 dark:text-slate-600" />
-                </div>
-                <p className="font-medium text-sm text-slate-600 dark:text-slate-400">Puste pole składu</p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 max-w-[250px]">Skorzystaj z narzędzi AI, aby wygenerować profesjonalny układ typograficzny.</p>
-              </div>
-            )}
-            
-            {isLoading && (
-              <div className="absolute inset-x-0 bottom-0 top-10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-10 transition-all">
-                <div className="bg-white dark:bg-slate-800 px-6 py-4 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
-                  <Loader2 className="animate-spin text-slate-600 dark:text-slate-400" size={24} />
-                  <div className="flex flex-col text-left">
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Przetwarzanie algorytmiczne...</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Analiza gramatyki i łamanie tekstu</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </section>
 
         {/* Right Column: Dynamic Panel */}
@@ -497,14 +564,14 @@ export default function App() {
           <aside className="w-full lg:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all animate-in slide-in-from-right-8 duration-300">
             {/* Tabs Header */}
             <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-              <button 
+              <button
                 onClick={() => setActiveRightTab('analytics')}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors ${activeRightTab === 'analytics' ? 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 border-b-2 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
               >
                 <BarChart2 size={14} />
                 Analityka
               </button>
-              <button 
+              <button
                 onClick={() => setActiveRightTab('media')}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors ${activeRightTab === 'media' ? 'text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border-b-2 border-emerald-600 dark:border-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
               >
@@ -512,14 +579,14 @@ export default function App() {
                 Media
               </button>
             </div>
-            
+
             {activeRightTab === 'analytics' ? (
               <AnalyticsPanel text={inputText} />
             ) : (
               <div className="p-4 flex flex-col h-full overflow-y-auto">
                 <div className="mb-4">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Styl Ilustracji</label>
-                  <select 
+                  <select
                     value={imageStyle}
                     onChange={(e) => setImageStyle(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
@@ -531,7 +598,7 @@ export default function App() {
                   </select>
                 </div>
 
-                <button 
+                <button
                   onClick={generateImage}
                   disabled={isGeneratingImage}
                   className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 shadow-lg mb-6"
@@ -568,8 +635,8 @@ export default function App() {
       {/* Pending Change Modal */}
       {pendingChange && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-6xl overflow-hidden flex flex-col h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Check size={18} className="text-emerald-500" /> Weryfikacja Zmian
               </h3>
@@ -577,18 +644,19 @@ export default function App() {
                 ✕
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="mb-6">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Raport Edukacyjny:</h4>
-                <div className="flex flex-col gap-3">
+            <div className="p-6 flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden bg-white dark:bg-slate-900">
+              {/* Left Column: Cards */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 shrink-0">Raport Edukacyjny:</h4>
+                <div className="flex flex-col gap-3 overflow-y-auto pr-2 pb-4">
                   {pendingChange.changes && pendingChange.changes.length > 0 ? (
                     pendingChange.changes.map((change, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         onClick={() => {
                           const newChanges = [...pendingChange.changes];
                           newChanges[idx].isSelected = !newChanges[idx].isSelected;
-                          setPendingChange({...pendingChange, changes: newChanges});
+                          setPendingChange({ ...pendingChange, changes: newChanges });
                         }}
                         className={`bg-white dark:bg-slate-800 border ${change.isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'} rounded-xl p-4 shadow-sm flex flex-col gap-2 relative cursor-pointer transition-all`}
                       >
@@ -605,6 +673,18 @@ export default function App() {
                           <strong className={change.isSelected ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'}>Dlaczego? </strong>
                           {change.explanation}
                         </p>
+                        {change.originalText && change.newText && change.originalText !== change.newText && (
+                          <div className={`mt-2 p-3 rounded-lg flex flex-col gap-1.5 text-[12px] font-['Georgia',serif] border ${change.isSelected ? 'bg-slate-50/50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700/50' : 'bg-transparent border-slate-100 dark:border-slate-800 opacity-70'}`}>
+                            <div className="flex gap-2 text-slate-500 dark:text-slate-500">
+                              <span className="shrink-0 text-[10px] font-sans font-bold uppercase tracking-wider text-red-500/70 mt-0.5">Było:</span>
+                              <span className="line-through decoration-red-500/40">{change.originalText}</span>
+                            </div>
+                            <div className="flex gap-2 text-slate-700 dark:text-slate-300">
+                              <span className="shrink-0 text-[10px] font-sans font-bold uppercase tracking-wider text-emerald-500/70 mt-0.5">Jest:</span>
+                              <span className="font-medium bg-emerald-100/50 dark:bg-emerald-900/30 px-1 rounded">{change.newText}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -612,26 +692,38 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <div>
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Podgląd nowej treści ze zmianami:</h4>
-                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner max-h-64 overflow-y-auto">
+
+              {/* Right Column: Preview Diff */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 shrink-0">Podgląd nowej treści ze zmianami:</h4>
+                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner overflow-y-auto flex-1 h-full">
                   {renderDiff(pendingChange.originalText, getPreviewText())}
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
-              <button 
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+              <button
                 onClick={() => setPendingChange(null)}
                 className="px-5 py-2.5 rounded-xl font-medium text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
               >
                 Odrzuć
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const finalText = getPreviewText();
+                  // Zapis historii przed wprowadzeniem zmiany
+                  setHistory(prev => [{ timestamp: Date.now(), text: inputText }, ...prev]);
+                  
                   if (pendingChange.isSelection) {
-                    setInputText(inputText.replace(pendingChange.originalText, finalText));
+                    const escapedOriginal = pendingChange.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regexStr = escapedOriginal.replace(/\s+/g, '\\s+');
+                    const regex = new RegExp(regexStr);
+                    
+                    const newFullText = inputText.replace(regex, finalText);
+                    setInputText(newFullText);
+                    setOutputText(newFullText);
                   } else {
+                    setInputText(finalText);
                     setOutputText(finalText);
                   }
                   setPendingChange(null);
@@ -640,6 +732,133 @@ export default function App() {
               >
                 <Check size={16} /> Zatwierdź i Wprowadź
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <FileDown size={18} className="text-indigo-500" /> Opcje Eksportu
+              </h3>
+              <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Tytuł Dokumentu</label>
+                <input
+                  type="text"
+                  value={docTitle}
+                  onChange={e => setDocTitle(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Autor (Dla EPUB)</label>
+                <input
+                  type="text"
+                  value={docAuthor}
+                  onChange={e => setDocAuthor(e.target.value)}
+                  placeholder="Imię i nazwisko"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              {images.length > 0 && (
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800/50 flex gap-3 items-center">
+                  <div className="w-10 h-10 rounded overflow-hidden shrink-0">
+                    <img src={images[0]} alt="cover" className="w-full h-full object-cover" />
+                  </div>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                    Ostatni wygenerowany obraz (Nano Banana 2) zostanie użyty jako okładka dla pliku EPUB.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-4 grid grid-cols-3 gap-3">
+                <button
+                  onClick={exportPDF}
+                  disabled={exporting}
+                  className="flex flex-col items-center justify-center gap-2 p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  <span className="text-lg font-black text-red-500">PDF</span>
+                  <span className="text-[10px] text-slate-500 font-medium">Do druku</span>
+                </button>
+
+                <button
+                  onClick={exportEpub}
+                  disabled={exporting}
+                  className="flex flex-col items-center justify-center gap-2 p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  {exporting ? <Loader2 size={24} className="animate-spin text-emerald-500" /> : <span className="text-lg font-black text-emerald-500">EPUB</span>}
+                  <span className="text-[10px] text-slate-500 font-medium">E-book</span>
+                </button>
+
+                <button
+                  onClick={exportDocx}
+                  disabled={exporting}
+                  className="flex flex-col items-center justify-center gap-2 p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  {exporting ? <Loader2 size={24} className="animate-spin text-blue-500" /> : <span className="text-lg font-black text-blue-500">DOCX</span>}
+                  <span className="text-[10px] text-slate-500 font-medium">Do redakcji</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal / Drawer */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <History size={18} className="text-indigo-500" /> Time Machine
+              </h3>
+              <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                ✕
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-3">
+              {history.length > 0 ? history.map((item, idx) => (
+                <div key={idx} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex flex-col gap-3 group hover:border-indigo-500/50 transition-colors">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {new Date(item.timestamp).toLocaleTimeString()}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        if (confirm('Czy na pewno chcesz przywrócić tę wersję? Obecny tekst zostanie nadpisany.')) {
+                          setInputText(item.text);
+                          setOutputText(item.text);
+                          setShowHistory(false);
+                        }
+                      }}
+                      className="text-xs bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-3 py-1.5 rounded-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Przywróć
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 font-['Georgia',serif] line-clamp-3">
+                    {item.text}
+                  </p>
+                </div>
+              )) : (
+                <div className="text-center py-10 opacity-60">
+                  <History size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                  <p className="text-sm font-medium text-slate-500">Brak zapisanych wersji</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Wersje zapisują się automatycznie po zatwierdzeniu zmian AI.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
