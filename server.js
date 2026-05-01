@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 const genAI_Free = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY_FREE || process.env.GEMINI_API_KEY });
-const genAI_Paid = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const genAI_Paid = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_FREE });
 
 app.post('/api/verify-password', (req, res) => {
   const { password } = req.body;
@@ -48,7 +48,9 @@ Struktura:
     {
       "location": "Akapit X, linia Y",
       "action": "Krótki opis zmiany",
-      "explanation": "Edukacyjne uzasadnienie dlaczego to jest konieczne (np. zasady typograficzne)"
+      "explanation": "Edukacyjne uzasadnienie dlaczego to jest konieczne (np. zasady typograficzne)",
+      "originalText": "Dokładny fragment tekstu przed zmianą (musi być unikalny w skali tekstu)",
+      "newText": "Dokładny fragment tekstu po zmianie"
     }
   ],
   "text": "Twój właściwy wynik"
@@ -89,7 +91,7 @@ app.post('/api/generate-image', async (req, res) => {
       return res.status(400).json({ error: 'prompt is required' });
     }
 
-    const finalPrompt = `\${prompt}. Style: \${style || 'cyberpunk'}. High quality, detailed illustration.`;
+    const finalPrompt = `${prompt}. Style: ${style || 'cyberpunk'}. High quality, detailed illustration.`;
 
     const response = await genAI_Paid.models.generateImages({
       model: 'gemini-3.1-flash-image-preview',
@@ -102,12 +104,12 @@ app.post('/api/generate-image', async (req, res) => {
     });
 
     const base64Image = response.generatedImages[0].image.imageBytes;
-    const imageUrl = `data:image/jpeg;base64,\${base64Image}`;
+    const imageUrl = `data:image/jpeg;base64,${base64Image}`;
 
     res.json({ imageUrl });
   } catch (error) {
     console.error('Error generating image:', error);
-    res.status(500).json({ error: 'Error generating image' });
+    res.status(500).json({ error: error.message || 'Error generating image' });
   }
 });
 
