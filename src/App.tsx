@@ -557,8 +557,6 @@ export default function App() {
           />
         </section>
 
-        </section>
-
         {/* Right Column: Dynamic Panel */}
         {showMediaPanel && (
           <aside className="w-full lg:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all animate-in slide-in-from-right-8 duration-300">
@@ -644,7 +642,7 @@ export default function App() {
                 ✕
               </button>
             </div>
-            <div className="p-6 flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden bg-white dark:bg-slate-900">
+            <div className="p-6 flex-1 flex flex-col md:flex-row gap-6 overflow-hidden bg-white dark:bg-slate-900">
               {/* Left Column: Cards */}
               <div className="flex-1 flex flex-col overflow-hidden">
                 <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 shrink-0">Raport Edukacyjny:</h4>
