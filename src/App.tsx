@@ -557,6 +557,29 @@ export default function App() {
           />
         </section>
 
+        {/* Middle Column: Output */}
+        <section className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden min-h-[40vh] transition-colors">
+          <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-emerald-500" />
+              <h2 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Wynik</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <button onClick={handleCopy} className="text-[10px] font-bold text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-1 uppercase tracking-wider transition-colors" title="Kopiuj wynik">
+                {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Skopiowano' : 'Kopiuj'}
+              </button>
+              <span className="text-[11px] text-slate-400 font-mono">{outputText.length} znaków</span>
+            </div>
+          </div>
+          <textarea
+            className="flex-1 w-full p-6 text-slate-800 dark:text-slate-200 bg-transparent resize-none focus:outline-none font-['Georgia',serif] leading-relaxed text-[15px] placeholder-slate-300 dark:placeholder-slate-700"
+            placeholder="Tutaj pojawi się sformatowany tekst. Możesz go również edytować ręcznie."
+            value={outputText}
+            onChange={(e) => setOutputText(e.target.value)}
+            spellCheck={false}
+          />
+        </section>
+
         {/* Right Column: Dynamic Panel */}
         {showMediaPanel && (
           <aside className="w-full lg:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all animate-in slide-in-from-right-8 duration-300">
@@ -710,18 +733,17 @@ export default function App() {
                 onClick={() => {
                   const finalText = getPreviewText();
                   // Zapis historii przed wprowadzeniem zmiany
-                  setHistory(prev => [{ timestamp: Date.now(), text: inputText }, ...prev]);
+                  setHistory(prev => [{ timestamp: Date.now(), text: outputText || inputText }, ...prev]);
                   
                   if (pendingChange.isSelection) {
                     const escapedOriginal = pendingChange.originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     const regexStr = escapedOriginal.replace(/\s+/g, '\\s+');
                     const regex = new RegExp(regexStr);
                     
-                    const newFullText = inputText.replace(regex, finalText);
-                    setInputText(newFullText);
+                    const baseText = outputText || inputText;
+                    const newFullText = baseText.replace(regex, finalText);
                     setOutputText(newFullText);
                   } else {
-                    setInputText(finalText);
                     setOutputText(finalText);
                   }
                   setPendingChange(null);
@@ -835,8 +857,7 @@ export default function App() {
                     </span>
                     <button 
                       onClick={() => {
-                        if (confirm('Czy na pewno chcesz przywrócić tę wersję? Obecny tekst zostanie nadpisany.')) {
-                          setInputText(item.text);
+                        if (confirm('Czy na pewno chcesz przywrócić tę wersję? Wynik zostanie nadpisany.')) {
                           setOutputText(item.text);
                           setShowHistory(false);
                         }
